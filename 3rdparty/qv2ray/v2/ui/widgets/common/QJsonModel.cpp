@@ -191,13 +191,13 @@ QVariant QJsonModel::data(const QModelIndex &index, int role) const {
 
     if (role == Qt::DisplayRole) {
         if (index.column() == 0)
-            return QStringLiteral("%1").arg(item->key());
+            return QString("%1").arg(item->key());
 
         if (index.column() == 1)
-            return QStringLiteral("%1").arg(item->value());
+            return QString("%1").arg(item->value());
     } else if (Qt::EditRole == role) {
         if (index.column() == 1) {
-            return QStringLiteral("%1").arg(item->value());
+            return QString("%1").arg(item->value());
         }
     }
 

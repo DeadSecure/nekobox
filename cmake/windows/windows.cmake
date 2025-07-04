@@ -1,15 +1,15 @@
-set(PLATFORM_SOURCES 3rdparty/WinCommander.cpp sys/windows/guihelper.cpp sys/windows/MiniDump.cpp)
+set(PLATFORM_SOURCES 3rdparty/WinCommander.cpp src/sys/windows/guihelper.cpp src/sys/windows/MiniDump.cpp src/sys/windows/eventHandler.cpp)
 set(PLATFORM_LIBRARIES wininet wsock32 ws2_32 user32 rasapi32 iphlpapi)
 
 include(cmake/windows/generate_product_version.cmake)
 generate_product_version(
         QV2RAY_RC
-        ICON "${CMAKE_SOURCE_DIR}/res/nekobox.ico"
-        NAME "nekobox"
-        BUNDLE "nekobox"
-        COMPANY_NAME "nekobox"
-        COMPANY_COPYRIGHT "nekobox"
-        FILE_DESCRIPTION "nekobox"
+        ICON "${CMAKE_SOURCE_DIR}/res/nekoray.ico"
+        NAME "nekoray"
+        BUNDLE "nekoray"
+        COMPANY_NAME "nekoray"
+        COMPANY_COPYRIGHT "nekoray"
+        FILE_DESCRIPTION "nekoray"
 )
 add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
 set(GUI_TYPE WIN32)
