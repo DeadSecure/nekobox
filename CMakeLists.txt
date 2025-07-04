@@ -1,36 +1,30 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
-project(nekobox VERSION 0.1 LANGUAGES CXX)
+project(nekoray VERSION 0.1)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# WINDOWS PDB FILE
-if (WIN32)
-    if (MSVC)
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
-        set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
-    endif ()
+set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND WIN32)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 endif ()
 
-# Find Qt
-if (NOT QT_VERSION_MAJOR)
-    set(QT_VERSION_MAJOR 5)
-endif ()
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network Svg LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network LinguistTools DBus)
 
 if (NKR_CROSS)
-    set_property(TARGET Qt5::moc PROPERTY IMPORTED_LOCATION /usr/bin/moc)
-    set_property(TARGET Qt5::uic PROPERTY IMPORTED_LOCATION /usr/bin/uic)
-    set_property(TARGET Qt5::rcc PROPERTY IMPORTED_LOCATION /usr/bin/rcc)
-    set_property(TARGET Qt5::lrelease PROPERTY IMPORTED_LOCATION /usr/bin/lrelease)
-    set_property(TARGET Qt5::lupdate PROPERTY IMPORTED_LOCATION /usr/bin/lupdate)
+    set_property(TARGET Qt6::moc PROPERTY IMPORTED_LOCATION /usr/bin/moc)
+    set_property(TARGET Qt6::uic PROPERTY IMPORTED_LOCATION /usr/bin/uic)
+    set_property(TARGET Qt6::rcc PROPERTY IMPORTED_LOCATION /usr/bin/rcc)
+    set_property(TARGET Qt6::lrelease PROPERTY IMPORTED_LOCATION /usr/bin/lrelease)
+    set_property(TARGET Qt6::lupdate PROPERTY IMPORTED_LOCATION /usr/bin/lupdate)
 endif ()
 
 #### Platform Variables ####
-if (WIN32)
+if (APPLE)
+    include("cmake/macos/macos.cmake")
+elseif (WIN32)
     include("cmake/windows/windows.cmake")
 else ()
     include("cmake/linux/linux.cmake")
@@ -38,17 +32,8 @@ endif ()
 
 #### default prefix path ####
 
-if (NOT NKR_LIBS)
-    if (NKR_PACKAGE)
-        list(APPEND NKR_LIBS ${CMAKE_SOURCE_DIR}/libs/deps/package)
-    else ()
-        list(APPEND NKR_LIBS ${CMAKE_SOURCE_DIR}/libs/deps/built)
-    endif ()
-endif ()
-
-if (NOT NKR_DISABLE_LIBS)
-    list(APPEND CMAKE_PREFIX_PATH ${NKR_LIBS})
-endif ()
+list(APPEND NKR_LIBS ${CMAKE_SOURCE_DIR}/libs/deps/built)
+list(APPEND CMAKE_PREFIX_PATH ${NKR_LIBS})
 
 message("[CMAKE_PREFIX_PATH] ${CMAKE_PREFIX_PATH}")
 
@@ -60,243 +45,224 @@ message("[CMAKE_FIND_ROOT_PATH] ${CMAKE_FIND_ROOT_PATH}")
 
 include("cmake/print.cmake")
 include("cmake/nkr.cmake")
+include("cmake/QHotkey.cmake")
 
 find_package(Threads)
 
-#### NKR EXTERNAL ####
-
-if (NKR_NO_EXTERNAL)
-    set(NKR_NO_GRPC 1)
-    set(NKR_NO_YAML 1)
-    set(NKR_NO_ZXING 1)
-    set(NKR_NO_QHOTKEY 1)
+if (NKR_PACKAGE OR NKR_PACKAGE_MACOS)
+    nkr_add_compile_definitions(NKR_CPP_USE_APPDATA)
 endif ()
 
-# grpc
-if (NKR_NO_GRPC)
-    nkr_add_compile_definitions(NKR_NO_GRPC)
-else ()
-    # My proto
-    include("cmake/myproto.cmake")
-    list(APPEND NKR_EXTERNAL_TARGETS myproto)
-endif ()
+include("cmake/myproto.cmake")
+list(APPEND NKR_EXTERNAL_TARGETS myproto)
 
-# yaml-cpp
-if (NKR_NO_YAML)
-    nkr_add_compile_definitions(NKR_NO_YAML)
-else ()
-    find_package(yaml-cpp CONFIG REQUIRED) # only Release is built
-    list(APPEND NKR_EXTERNAL_TARGETS yaml-cpp)
-endif ()
-
-# zxing-cpp
-if (NKR_NO_ZXING)
-    nkr_add_compile_definitions(NKR_NO_ZXING)
-else ()
-    find_package(ZXing CONFIG REQUIRED)
-    list(APPEND NKR_EXTERNAL_TARGETS ZXing::ZXing)
-endif ()
-
-# QHotkey (static submodule)
-if (NKR_NO_QHOTKEY)
-    nkr_add_compile_definitions(NKR_NO_QHOTKEY)
-else ()
-    set(QHOTKEY_INSTALL OFF)
-    set(BUILD_SHARED_LIBS OFF)
-    add_subdirectory(3rdparty/QHotkey)
-    list(APPEND NKR_EXTERNAL_TARGETS qhotkey)
-endif ()
-
-#### debug print ####
-
-if (DBG_CMAKE)
-    print_all_variables()
-    print_target_properties(myproto)
-    print_target_properties(yaml-cpp)
-    print_target_properties(ZXing::ZXing)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
-endif ()
+set(BUILD_SHARED_LIBS OFF)
+list(APPEND NKR_EXTERNAL_TARGETS qhotkey)
 
 # Sources
 set(PROJECT_SOURCES
         ${PLATFORM_SOURCES}
 
-        main/main.cpp
-        main/NekoGui.cpp
-        main/NekoGui_Utils.cpp
-        main/HTTPRequestHelper.cpp
+        src/main.cpp
+        src/global/NekoGui.cpp
+        src/global/NekoGui_Utils.cpp
+        src/global/HTTPRequestHelper.cpp
 
         3rdparty/base64.cpp
         3rdparty/qrcodegen.cpp
         3rdparty/QtExtKeySequenceEdit.cpp
+        3rdparty/QrDecoder.cpp
 
+        3rdparty/qv2ray/v2/ui/LogHighlighter.cpp
         3rdparty/qv2ray/v2/ui/QvAutoCompleteTextEdit.cpp
-        3rdparty/qv2ray/v2/components/proxy/QvProxyConfigurator.cpp
         3rdparty/qv2ray/v2/ui/widgets/common/QJsonModel.cpp
         3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.cpp
         3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.hpp
         3rdparty/qv2ray/v2/ui/widgets/editors/w_JsonEditor.ui
+        3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.cpp
+        3rdparty/qv2ray/v2/ui/widgets/speedchart/SpeedWidget.hpp
+        3rdparty/qv2ray/v2/proxy/QvProxyConfigurator.cpp
 
-        3rdparty/qv2ray/v3/components/GeositeReader/GeositeReader.cpp
-        3rdparty/qv2ray/v3/components/GeositeReader/picoproto.cpp
+        3rdparty/quirc/decode.c
+        3rdparty/quirc/identify.c
+        3rdparty/quirc/quirc.c
+        3rdparty/quirc/version_db.c
 
-        rpc/gRPC.cpp
+        src/api/gRPC.cpp
 
-        db/Database.cpp
-        db/traffic/TrafficLooper.cpp
-        db/ProfileFilter.cpp
-        db/ConfigBuilder.cpp
+        src/dataStore/Database.cpp
+        src/stats/traffic/TrafficLooper.cpp
+        src/dataStore/ProfileFilter.cpp
+        src/configs/ConfigBuilder.cpp
 
-        fmt/AbstractBean.cpp
-        fmt/Bean2CoreObj_box.cpp
-        fmt/Bean2External.cpp
-        fmt/Bean2Link.cpp
-        fmt/Link2Bean.cpp
-        fmt/ChainBean.hpp # translate
+        src/configs/proxy/AbstractBean.cpp
+        src/configs/proxy/Bean2CoreObj_box.cpp
+        src/configs/proxy/Bean2Link.cpp
+        src/configs/proxy/Link2Bean.cpp
+        include/configs/proxy/ChainBean.hpp # translate
 
-        sub/GroupUpdater.cpp
+        include/configs/sub/GroupUpdater.hpp
+        src/configs/sub/GroupUpdater.cpp
 
-        sys/ExternalProcess.cpp
-        sys/AutoRun.cpp
+        include/sys/Process.hpp
+        src/sys/Process.cpp
+        src/sys/AutoRun.cpp
 
-        ui/ThemeManager.cpp
-        ui/Icon.cpp
+        include/ui/setting/ThemeManager.hpp
+        src/ui/setting/ThemeManager.cpp
+        src/ui/setting/Icon.cpp
 
-        ui/mainwindow_grpc.cpp
-        ui/mainwindow.cpp
-        ui/mainwindow.h
-        ui/mainwindow.ui
+        src/ui/mainwindow_grpc.cpp
+        src/ui/mainwindow.cpp
+        include/ui/mainwindow.h
+        include/ui/mainwindow.ui
 
-        ui/edit/dialog_edit_profile.h
-        ui/edit/dialog_edit_profile.cpp
-        ui/edit/dialog_edit_profile.ui
-        ui/edit/dialog_edit_group.h
-        ui/edit/dialog_edit_group.cpp
-        ui/edit/dialog_edit_group.ui
+        include/ui/profile/dialog_edit_profile.h
+        src/ui/profile/dialog_edit_profile.cpp
+        include/ui/profile/dialog_edit_profile.ui
+        include/ui/group/dialog_edit_group.h
+        src/ui/group/dialog_edit_group.cpp
+        include/ui/group/dialog_edit_group.ui
 
-        ui/edit/edit_chain.h
-        ui/edit/edit_chain.cpp
-        ui/edit/edit_chain.ui
-        ui/edit/edit_socks_http.h
-        ui/edit/edit_socks_http.cpp
-        ui/edit/edit_socks_http.ui
-        ui/edit/edit_shadowsocks.h
-        ui/edit/edit_shadowsocks.cpp
-        ui/edit/edit_shadowsocks.ui
-        ui/edit/edit_vmess.h
-        ui/edit/edit_vmess.cpp
-        ui/edit/edit_vmess.ui
-        ui/edit/edit_trojan_vless.h
-        ui/edit/edit_trojan_vless.cpp
-        ui/edit/edit_trojan_vless.ui
+        include/ui/profile/edit_chain.h
+        src/ui/profile/edit_chain.cpp
+        include/ui/profile/edit_chain.ui
+        include/ui/profile/edit_socks_http.h
+        src/ui/profile/edit_socks_http.cpp
+        include/ui/profile/edit_socks_http.ui
+        include/ui/profile/edit_shadowsocks.h
+        src/ui/profile/edit_shadowsocks.cpp
+        include/ui/profile/edit_shadowsocks.ui
+        include/ui/profile/edit_vmess.h
+        src/ui/profile/edit_vmess.cpp
+        include/ui/profile/edit_vmess.ui
+        include/ui/profile/edit_trojan_vless.h
+        src/ui/profile/edit_trojan_vless.cpp
+        include/ui/profile/edit_trojan_vless.ui
 
-        ui/edit/edit_naive.h
-        ui/edit/edit_naive.cpp
-        ui/edit/edit_naive.ui
+        include/ui/profile/edit_quic.h
+        src/ui/profile/edit_quic.cpp
+        include/ui/profile/edit_quic.ui
 
-        ui/edit/edit_quic.h
-        ui/edit/edit_quic.cpp
-        ui/edit/edit_quic.ui
+        include/ui/profile/edit_custom.h
+        src/ui/profile/edit_custom.cpp
+        include/ui/profile/edit_custom.ui
 
-        ui/edit/edit_custom.h
-        ui/edit/edit_custom.cpp
-        ui/edit/edit_custom.ui
+        include/ui/profile/edit_extra_core.h
+        src/ui/profile/edit_extra_core.cpp
+        include/ui/profile/edit_extra_core.ui
 
-        ui/dialog_basic_settings.cpp
-        ui/dialog_basic_settings.h
-        ui/dialog_basic_settings.ui
+        include/ui/profile/edit_wireguard.h
+        src/ui/profile/edit_wireguard.cpp
+        include/ui/profile/edit_wireguard.ui
 
-        ui/dialog_manage_groups.cpp
-        ui/dialog_manage_groups.h
-        ui/dialog_manage_groups.ui
+        src/ui/setting/dialog_basic_settings.cpp
+        include/ui/setting/dialog_basic_settings.h
+        include/ui/setting/dialog_basic_settings.ui
 
-        ui/dialog_manage_routes.cpp
-        ui/dialog_manage_routes.h
-        ui/dialog_manage_routes.ui
+        src/ui/group/dialog_manage_groups.cpp
+        include/ui/group/dialog_manage_groups.h
+        include/ui/group/dialog_manage_groups.ui
 
-        ui/dialog_vpn_settings.cpp
-        ui/dialog_vpn_settings.h
-        ui/dialog_vpn_settings.ui
+        src/ui/setting/dialog_manage_routes.cpp
+        include/ui/setting/dialog_manage_routes.h
+        include/ui/setting/dialog_manage_routes.ui
 
-        ui/dialog_hotkey.cpp
-        ui/dialog_hotkey.h
-        ui/dialog_hotkey.ui
+        src/ui/setting/dialog_vpn_settings.cpp
+        include/ui/setting/dialog_vpn_settings.h
+        include/ui/setting/dialog_vpn_settings.ui
 
-        ui/widget/ProxyItem.cpp
-        ui/widget/ProxyItem.h
-        ui/widget/ProxyItem.ui
-        ui/widget/GroupItem.cpp
-        ui/widget/GroupItem.h
-        ui/widget/GroupItem.ui
+        src/ui/setting/dialog_hotkey.cpp
+        include/ui/setting/dialog_hotkey.h
+        include/ui/setting/dialog_hotkey.ui
+
+        src/ui/profile/ProxyItem.cpp
+        include/ui/profile/ProxyItem.h
+        include/ui/profile/ProxyItem.ui
+        src/ui/group/GroupItem.cpp
+        include/ui/group/GroupItem.h
+        include/ui/group/GroupItem.ui
+        src/ui/setting/RouteItem.cpp
+        include/ui/setting/RouteItem.h
+        include/ui/setting/RouteItem.ui
 
         res/neko.qrc
-        res/theme/feiyangqingyun/qss.qrc
         ${QV2RAY_RC}
+        include/dataStore/RouteEntity.h
+        src/dataStore/RouteEntity.cpp
+        res/darkstyle.qrc
+        src/ui/profile/edit_ssh.cpp
+        include/ui/profile/edit_ssh.h
+        include/ui/profile/edit_ssh.ui
+        include/configs/proxy/SSHBean.h
+        include/sys/macos/MacOS.h
+
+        src/sys/linux/LinuxCap.cpp
+
+        src/sys/macos/MacOS.cpp
+
+        src/sys/AutoRun.cpp
+        src/sys/Process.cpp
+        include/ui/mainwindow_interface.h
+        include/stats/connections/connectionLister.hpp
+        src/stats/connectionLister/connectionLister.cpp
+        src/configs/proxy/Json2Bean.cpp
+        include/sys/windows/eventHandler.h
 )
 
 # Qt exe
-if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(nekobox
-            MANUAL_FINALIZATION
-            ${PROJECT_SOURCES}
-    )
-    # Define target properties for Android with Qt 6 as:
-    #    set_property(TARGET nekobox APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-    #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-    # For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
-else ()
-    if (ANDROID)
-        add_library(nekobox SHARED
-                ${PROJECT_SOURCES}
-        )
-        # Define properties for Android with Qt 5 after find_package() calls as:
-        #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
-    else ()
-        add_executable(nekobox
-                ${PROJECT_SOURCES}
-        )
-    endif ()
-endif ()
+qt_add_executable(nekoray
+        MANUAL_FINALIZATION
+        ${PROJECT_SOURCES}
+)
 
 # Target
 
-set_property(TARGET nekobox PROPERTY AUTOUIC ON)
-set_property(TARGET nekobox PROPERTY AUTOMOC ON)
-set_property(TARGET nekobox PROPERTY AUTORCC ON)
+set_property(TARGET nekoray PROPERTY AUTOUIC ON)
+set_property(TARGET nekoray PROPERTY AUTOMOC ON)
+set_property(TARGET nekoray PROPERTY AUTORCC ON)
 
-set_target_properties(nekobox PROPERTIES
+
+# Target Source macOS
+
+set(MACOSX_ICON ${CMAKE_SOURCE_DIR}/res/nekoray.icns)
+if (APPLE)
+    target_sources(nekoray PRIVATE ${MACOSX_ICON})
+endif ()
+
+set_target_properties(nekoray PROPERTIES
+        MACOSX_BUNDLE_ICON_FILE "nekoray.icns"
+        RESOURCE ${MACOSX_ICON}
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/res/MacOSXBundleInfo.plist
+        MACOSX_BUNDLE_GUI_IDENTIFIER moe.nekoray.macosx
+        MACOSX_BUNDLE TRUE
         WIN32_EXECUTABLE TRUE
+
 )
 
 # Target Source Translations
 
 set(TS_FILES
-        translations/zh_CN.ts
-        translations/fa_IR.ts
-        translations/ru_RU.ts
+        res/translations/zh_CN.ts
+        res/translations/fa_IR.ts
+        res/translations/ru_RU.ts
 )
 set(LUPDATE_OPTIONS
         -locations none -no-obsolete
 )
-if (${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_lupdate(nekobox TS_FILES ${TS_FILES} OPTIONS ${LUPDATE_OPTIONS})
-    qt_add_lrelease(nekobox TS_FILES ${TS_FILES} QM_FILES_OUTPUT_VARIABLE QM_FILES)
-else ()
-    qt5_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES} OPTIONS ${LUPDATE_OPTIONS})
-endif ()
-configure_file(translations/translations.qrc ${CMAKE_BINARY_DIR} COPYONLY)
-target_sources(nekobox PRIVATE ${CMAKE_BINARY_DIR}/translations.qrc)
+qt_add_lupdate(nekoray TS_FILES ${TS_FILES} OPTIONS ${LUPDATE_OPTIONS})
+qt_add_lrelease(nekoray TS_FILES ${TS_FILES} QM_FILES_OUTPUT_VARIABLE QM_FILES)
+
+configure_file(res/translations/translations.qrc ${CMAKE_BINARY_DIR} COPYONLY)
+target_sources(nekoray PRIVATE ${CMAKE_BINARY_DIR}/translations.qrc)
 
 # Target Link
 
-target_link_libraries(nekobox PRIVATE
-        Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::Svg
+target_link_libraries(nekoray PRIVATE
+        Qt6::Widgets Qt6::Network Qt6::DBus
         Threads::Threads
         ${NKR_EXTERNAL_TARGETS}
         ${PLATFORM_LIBRARIES}
 )
 
-if (QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(nekobox)
-endif ()
+qt_finalize_executable(nekoray)
